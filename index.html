@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>教務管理行事曆 v3.6</title>
+<title>教務管理行事曆 v3.7</title>
 <style>
   :root {
     --col-sun: #f8f9fa;
@@ -56,7 +56,6 @@
     color: white; padding: 2px 4px; border-radius: 3px; font-size: 11px; margin-bottom: 3px; 
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;
   }
-  /* 段考與模考的專屬標籤樣式 */
   .event-countdown { border: 1px solid #ef4444; color: #ef4444; background: white; font-weight: bold; }
   .event-mock-countdown { border: 1px solid #0284c7; color: #0284c7; background: white; font-weight: bold; }
   .event-prep { background-color: #8b5cf6; }
@@ -147,11 +146,11 @@
       </select>
     </div>
     <div class="form-group">
-      <label>連假迴避設定</label>
+      <label>手動強制跳過 (非假日之突發狀況)</label>
       <select id="skipHoliday">
-        <option value="none">正常 (考前第一、第二個週六)</option>
-        <option value="sat1">跳過考前第一週 (延至第三週)</option>
-        <option value="sat2">跳過考前第二週 (延至第三週)</option>
+        <option value="none">正常生成 (系統會自動避開國定假日)</option>
+        <option value="sat1">強制跳過考前第一週</option>
+        <option value="sat2">強制跳過考前第二週</option>
       </select>
     </div>
     <button class="btn-exam" onclick="generateExamSchedule()" style="width:100%;">自動生成 2堂加強課 與 倒數</button>
@@ -227,7 +226,6 @@
     document.getElementById('opt-25').innerText = g25;
     document.getElementById('opt-36').innerText = g36;
     
-    // 同步更新模考的下拉選單
     document.getElementById('m-opt-14').innerText = g14;
     document.getElementById('m-opt-25').innerText = g25;
     document.getElementById('m-opt-36').innerText = g36;
@@ -238,14 +236,13 @@
         let m = title.match(/(🔥).*:\s*(\d+)/);
         if (m) return m[1] + ' ' + m[2]; 
     }
-    // 模考倒數縮減邏輯
     if (type === 'mock_countdown') {
         let m = title.match(/(⏳).*:\s*(\d+)/);
-        if (m) return m[1] + ' ' + m[2]; // "⏳ 4"
+        if (m) return m[1] + ' ' + m[2]; 
     }
     if (type === 'prep') return '🛡️'; 
     if (type === 'exam') return '🏆'; 
-    if (type === 'mock_exam') return '🎯'; // 模考專用
+    if (type === 'mock_exam') return '🎯'; 
     if (title.length > 3) return title.substring(0, 3) + '..'; 
     return title;
   }
@@ -290,7 +287,6 @@
       let preps = dayEvents.filter(e => e.type === 'prep');
       let mockExams = dayEvents.filter(e => e.type === 'mock_exam');
 
-      // 視覺合併
       if(exams.length > 1) {
         dayEvents = dayEvents.filter(e => e.type !== 'exam');
         dayEvents.unshift({ type: 'exam', title: `🏆 段考 (${exams.length}班同考)`, color: '#ef4444' });
@@ -308,7 +304,7 @@
         let badge = document.createElement('div');
         badge.className = 'event-badge';
         if(e.type === 'countdown') badge.classList.add('event-countdown');
-        else if(e.type === 'mock_countdown') badge.classList.add('event-mock-countdown'); // 模考倒數樣式
+        else if(e.type === 'mock_countdown') badge.classList.add('event-mock-countdown'); 
         else if(e.type === 'prep') badge.classList.add('event-prep');
         else badge.style.backgroundColor = e.color;
         
@@ -332,7 +328,7 @@
     
     document.getElementById('normalAddSection').style.display = 'block';
     document.getElementById('examAddSection').style.display = 'block';
-    document.getElementById('mockAddSection').style.display = 'block'; // 顯示模考區塊
+    document.getElementById('mockAddSection').style.display = 'block'; 
     
     renderPanel(); 
     renderCalendar();
@@ -355,7 +351,6 @@
       item.className = 'event-list-item';
       item.style.borderLeftColor = e.color || '#ef4444';
       
-      // 針對面板內的文字顏色優化
       let titleStyle = '';
       if(e.type === 'countdown') titleStyle = 'color:#ef4444;font-weight:bold;';
       if(e.type === 'mock_countdown') titleStyle = 'color:#0284c7;font-weight:bold;';
@@ -383,7 +378,7 @@
   function deleteEvent(id) { db = db.filter(e => e.id !== id); saveAndRender(); }
   function saveAndRender() { localStorage.setItem('crm_events_v3', JSON.stringify(db)); renderPanel(); renderCalendar(); }
 
-  // 原始：一般段考生成邏輯
+  // ⭐ 段考：自動迴避假日大腦
   function generateExamSchedule() {
     if(!selectedDateStr) return;
     
@@ -394,31 +389,43 @@
     
     db.push({ id: Date.now().toString() + "_ex", date: selectedDateStr, title: `🏆 ${gradeName} 段考`, show: true, color: '#ef4444', type: 'exam' });
 
-    let dayOfWeek = examDate.getDay();
-    let sat1 = new Date(examDate);
-    let daysToSat1 = dayOfWeek === 6 ? 7 : dayOfWeek + 1;
-    sat1.setDate(sat1.getDate() - daysToSat1);
-    
-    let sat2 = new Date(sat1); sat2.setDate(sat2.getDate() - 7);
-    let sat3 = new Date(sat1); sat3.setDate(sat3.getDate() - 14);
+    // 1. 智慧尋找非假日的週六
+    let validSats = [];
+    let tempDate = new Date(examDate);
+    let dayOfWeek = tempDate.getDay();
+    let daysToSat = dayOfWeek === 6 ? 7 : dayOfWeek + 1;
+    tempDate.setDate(tempDate.getDate() - daysToSat);
+
+    while(validSats.length < 3) {
+      let tempStr = formatDate(tempDate);
+      if(!twHolidays[tempStr]) { // 關鍵：如果這天不是國定假日，才算有效週六
+          validSats.push(new Date(tempDate));
+      }
+      tempDate.setDate(tempDate.getDate() - 7); // 繼續往前推一週
+    }
 
     let prepDays = [];
-    if(skipAction === 'none') { prepDays = [sat1, sat2]; }
-    else if(skipAction === 'sat1') { prepDays = [sat2, sat3]; } 
-    else if(skipAction === 'sat2') { prepDays = [sat1, sat3]; } 
+    if(skipAction === 'none') { prepDays = [validSats[0], validSats[1]]; }
+    else if(skipAction === 'sat1') { prepDays = [validSats[1], validSats[2]]; } 
+    else if(skipAction === 'sat2') { prepDays = [validSats[0], validSats[2]]; } 
 
     prepDays.forEach((pDate, idx) => {
       db.push({ id: Date.now().toString() + "_p" + idx, date: formatDate(pDate), title: `🛡️ ${gradeName} 加強`, show: true, type: 'prep' });
     });
 
-    let countdownStart = new Date(sat1); 
+    // 2. 智慧生成倒數 (跳過國定假日)
+    let countdownStart = new Date(validSats[0]); // 從最接近的加強課再往前推兩週
     countdownStart.setDate(countdownStart.getDate() - 13); 
 
     let classDaysMatch = classType === '14' ? [1, 4] : classType === '25' ? [2, 5] : [3, 6];
     let classDates = [];
     
     for(let d = new Date(countdownStart); d < examDate; d.setDate(d.getDate() + 1)) {
-      if(classDaysMatch.includes(d.getDay())) classDates.push(formatDate(d));
+      let dStr = formatDate(d);
+      // 關鍵：除了符合星期幾，還必須「不是國定假日 (!twHolidays)」才會納入排課！
+      if(classDaysMatch.includes(d.getDay()) && !twHolidays[dStr]) {
+          classDates.push(dStr);
+      }
     }
 
     let total = classDates.length;
@@ -426,11 +433,11 @@
       db.push({ id: Date.now().toString() + "_c" + index, date: dStr, title: `🔥${gradeName}倒數: ${total - index}`, show: true, type: 'countdown' });
     });
 
-    alert(`已建立！\n對象：${gradeName}\n加強日：${formatDate(prepDays[0])} & ${formatDate(prepDays[1])}`);
+    alert(`段考排程已建立！\n系統已自動為您避開國定假日。\n對象：${gradeName}\n加強日：${formatDate(prepDays[0])} & ${formatDate(prepDays[1])}`);
     saveAndRender();
   }
 
-  // 全新：國三模考生成邏輯
+  // 🎯 模考：自動迴避假日大腦
   function generateMockSchedule() {
     if(!selectedDateStr) return;
     
@@ -438,28 +445,28 @@
     let examDate = new Date(selectedDateStr);
     let gradeName = getDynamicGrade(classType, examDate);
     
-    // 1. 建立模考當天事項
     db.push({ id: Date.now().toString() + "_me", date: selectedDateStr, title: `🎯 ${gradeName} 模擬考`, show: true, color: '#0284c7', type: 'mock_exam' });
 
-    // 2. 推算兩週前的倒數日
     let countdownStart = new Date(examDate); 
     countdownStart.setDate(countdownStart.getDate() - 14); 
 
     let classDaysMatch = classType === '14' ? [1, 4] : classType === '25' ? [2, 5] : [3, 6];
     let classDates = [];
     
-    // 只抓取上課日
     for(let d = new Date(countdownStart); d < examDate; d.setDate(d.getDate() + 1)) {
-      if(classDaysMatch.includes(d.getDay())) classDates.push(formatDate(d));
+      let dStr = formatDate(d);
+      // 關鍵：模考倒數一樣智慧跳過國定假日
+      if(classDaysMatch.includes(d.getDay()) && !twHolidays[dStr]) {
+          classDates.push(dStr);
+      }
     }
 
-    // 3. 建立專屬模考倒數標籤
     let total = classDates.length;
     classDates.forEach((dStr, index) => {
       db.push({ id: Date.now().toString() + "_mc" + index, date: dStr, title: `⏳${gradeName}模考: ${total - index}`, show: true, type: 'mock_countdown' });
     });
 
-    alert(`模考排程已建立！\n對象：${gradeName} 模擬考\n共為您生成 ${total} 堂模考倒數。`);
+    alert(`模考排程已建立！\n系統已自動為您避開國定假日。\n對象：${gradeName} 模擬考\n共生成 ${total} 堂模考倒數。`);
     saveAndRender();
   }
 
