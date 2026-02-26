@@ -3,170 +3,384 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>我的專屬行事曆</title>
+<title>教務管理行事曆</title>
 <style>
+  :root {
+    --col-sun: #f8f9fa;
+    --col-14: #e3f2fd; /* 一四藍 */
+    --col-25: #e8f5e9; /* 二五綠 */
+    --col-36: #fff3e0; /* 三六橘 */
+  }
   body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f0f4f8;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
+    background-color: #eceff1;
     margin: 0;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
   }
-  #calendar {
-    width: 800px;
-    background: white;
+  /* 左側行事曆區塊 */
+  #calendar-container {
+    flex: 7;
     padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
   }
   .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 15px;
+    background: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
   }
   button {
     padding: 8px 16px;
-    background-color: #1a73e8;
+    background-color: #475569;
     color: white;
     border: none;
     border-radius: 5px;
     cursor: pointer;
     font-size: 14px;
   }
-  button:hover { background-color: #1557b0; }
+  button:hover { background-color: #334155; }
+  .btn-exam { background-color: #ef4444; font-weight: bold; }
+  .btn-exam:hover { background-color: #dc2626; }
+  
   .weekdays {
-    display: flex;
-    font-weight: bold;
-    color: #5f6368;
-    margin-bottom: 10px;
-  }
-  .weekdays div {
-    width: 14.28%;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
     text-align: center;
+    font-weight: bold;
+    color: #475569;
+    margin-bottom: 5px;
   }
-  .days {
-    display: flex;
-    flex-wrap: wrap;
+  .days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-auto-rows: minmax(120px, 1fr);
+    gap: 4px;
+    flex: 1;
   }
-  .day {
-    width: 14.28%;
-    height: 100px;
-    border: 1px solid #e0e0e0;
-    box-sizing: border-box;
+  .day-cell {
+    background: white;
+    border-radius: 6px;
     padding: 8px;
     cursor: pointer;
     display: flex;
     flex-direction: column;
-    transition: background-color 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border: 2px solid transparent;
+    transition: 0.2s;
   }
-  .day:hover { background-color: #f1f3f4; }
-  .day-number { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 5px; }
-  .event {
-    background-color: #1a73e8;
+  .day-cell.active { border-color: #3b82f6; }
+  .day-cell:hover { filter: brightness(0.95); }
+  
+  /* 直行背景色設定 (nth-child 是 1-indexed, 1=日) */
+  .day-cell:nth-child(7n+1) { background-color: var(--col-sun); }
+  .day-cell:nth-child(7n+2), .day-cell:nth-child(7n+5) { background-color: var(--col-14); }
+  .day-cell:nth-child(7n+3), .day-cell:nth-child(7n+6) { background-color: var(--col-25); }
+  .day-cell:nth-child(7n+4), .day-cell:nth-child(7n+7) { background-color: var(--col-36); }
+
+  .date-num { font-weight: bold; margin-bottom: 5px; color: #1e293b; }
+  
+  .event-badge {
     color: white;
     padding: 3px 6px;
     border-radius: 4px;
     font-size: 12px;
-    margin-top: 2px;
-    overflow: hidden;
+    margin-bottom: 3px;
     white-space: nowrap;
+    overflow: hidden;
     text-overflow: ellipsis;
   }
-  .padding {
-    background-color: #f8f9fa;
-    cursor: default;
+  .event-countdown { border: 2px solid #ef4444; color: #ef4444; background: white; font-weight: bold; }
+
+  /* 右側控制面板 */
+  #panel-container {
+    flex: 3;
+    background: white;
+    border-left: 1px solid #cbd5e1;
+    padding: 20px;
+    box-shadow: -2px 0 10px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
   }
-  .padding:hover { background-color: #f8f9fa; }
+  .panel-header { font-size: 20px; font-weight: bold; margin-bottom: 20px; color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;}
+  
+  .event-list-item {
+    display: flex;
+    align-items: center;
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    border-left: 4px solid #cbd5e1;
+  }
+  .event-list-item input[type="checkbox"] { transform: scale(1.3); margin-right: 12px; cursor: pointer;}
+  .event-list-title { flex: 1; font-size: 14px; }
+  .event-del-btn { background: #ef4444; padding: 4px 8px; font-size: 12px; margin-left: 10px;}
+  
+  .add-section { margin-top: 20px; background: #f1f5f9; padding: 15px; border-radius: 8px; }
+  .add-section h4 { margin: 0 0 10px 0; color: #334155; }
+  .form-group { margin-bottom: 10px; }
+  .form-group label { font-size: 13px; color: #475569; display: block; margin-bottom: 4px;}
+  .form-group input[type="text"], .form-group select { width: 100%; padding: 6px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 4px;}
 </style>
 </head>
 <body>
 
-<div id="calendar">
+<div id="calendar-container">
   <div class="header">
-    <button id="backButton">◄ 上個月</button>
-    <h2 id="monthDisplay"></h2>
-    <button id="nextButton">下個月 ►</button>
+    <button onclick="changeWeek(-1)">◄ 上一週</button>
+    <h2 id="viewRangeDisplay" style="margin:0; color:#1e293b;">載入中...</h2>
+    <button onclick="changeWeek(1)">下一週 ►</button>
   </div>
   <div class="weekdays">
-    <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+    <div>日</div><div>一 (1/4)</div><div>二 (2/5)</div><div>三 (3/6)</div><div>四 (1/4)</div><div>五 (2/5)</div><div>六 (3/6)</div>
   </div>
-  <div class="days" id="days"></div>
+  <div class="days-grid" id="daysGrid"></div>
+</div>
+
+<div id="panel-container">
+  <div class="panel-header" id="panelTitle">請選擇日期</div>
+  <div id="eventList"></div>
+  
+  <div class="add-section" id="normalAddSection" style="display:none;">
+    <h4>➕ 新增代辦 / 記事</h4>
+    <div class="form-group">
+      <input type="text" id="evTitle" placeholder="輸入事項名稱...">
+    </div>
+    <div class="form-group" style="display:flex; gap:10px; align-items:center;">
+      <select id="evColor" style="width:100px;">
+        <option value="#3b82f6">藍色 (一般)</option>
+        <option value="#10b981">綠色 (完成)</option>
+        <option value="#f59e0b">黃色 (注意)</option>
+        <option value="#64748b">灰色 (備註)</option>
+      </select>
+      <label><input type="checkbox" id="evShow" checked> 顯示在月曆</label>
+    </div>
+    <button onclick="addNormalEvent()" style="width:100%;">新增事項</button>
+  </div>
+
+  <div class="add-section" id="examAddSection" style="display:none; background:#fee2e2; border:1px solid #fca5a5;">
+    <h4>⭐ 建立段考排程 (自動推算)</h4>
+    <div class="form-group">
+      <label>目標年級/班級</label>
+      <select id="examClass">
+        <option value="14">一四班</option>
+        <option value="25">二五班</option>
+        <option value="36">三六班</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label><input type="checkbox" id="examHoliday"> 考前兩週內遇連假 (加強日再提前一週)</label>
+    </div>
+    <button class="btn-exam" onclick="generateExamSchedule()" style="width:100%;">自動生成考前加強與倒數</button>
+  </div>
 </div>
 
 <script>
-  let nav = 0; // 控制月份前後切換
-  // 從瀏覽器記憶體抓取過去存的行程，如果沒有就給空陣列
-  let events = localStorage.getItem('my_calendar_events') ? JSON.parse(localStorage.getItem('my_calendar_events')) : [];
+  let db = JSON.parse(localStorage.getItem('crm_events')) || [];
+  let currentStartSunday = getSunday(new Date());
+  let selectedDateStr = null;
 
-  const calendar = document.getElementById('calendar');
-  const days = document.getElementById('days');
-  const monthDisplay = document.getElementById('monthDisplay');
+  function getSunday(d) {
+    let dt = new Date(d);
+    dt.setDate(dt.getDate() - dt.getDay());
+    return dt;
+  }
+  function formatDate(d) {
+    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+  }
 
-  function load() {
-    const dt = new Date();
-    dt.setMonth(new Date().getMonth() + nav);
+  function renderCalendar() {
+    const grid = document.getElementById('daysGrid');
+    grid.innerHTML = '';
     
-    const month = dt.getMonth();
-    const year = dt.getFullYear();
-    const firstDayOfMonth = new Date(year, month, 1);
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    let endDate = new Date(currentStartSunday);
+    endDate.setDate(endDate.getDate() + 27); // 4週 = 28天
     
-    const paddingDays = firstDayOfMonth.getDay(); // 這個月第一天前面要空幾格
+    document.getElementById('viewRangeDisplay').innerText = 
+      `${currentStartSunday.getMonth()+1}/${currentStartSunday.getDate()} - ${endDate.getMonth()+1}/${endDate.getDate()}`;
 
-    monthDisplay.innerText = `${year}年 ${month + 1}月`;
-    days.innerHTML = ''; // 清空上一次的畫面
+    for (let i = 0; i < 28; i++) {
+      let d = new Date(currentStartSunday);
+      d.setDate(d.getDate() + i);
+      let dStr = formatDate(d);
+      
+      let cell = document.createElement('div');
+      cell.className = `day-cell ${dStr === selectedDateStr ? 'active' : ''}`;
+      cell.onclick = () => selectDate(dStr);
+      
+      let numDiv = document.createElement('div');
+      numDiv.className = 'date-num';
+      // 如果是每個月1號，顯示月份
+      numDiv.innerText = d.getDate() === 1 ? `${d.getMonth()+1}月1日` : d.getDate();
+      cell.appendChild(numDiv);
 
-    for(let i = 1; i <= paddingDays + daysInMonth; i++) {
-      const daySquare = document.createElement('div');
-      daySquare.classList.add('day');
-
-      if (i > paddingDays) {
-        const dayNumber = i - paddingDays;
-        const currentDateString = `${year}/${month + 1}/${dayNumber}`;
-        
-        const dayNumberEl = document.createElement('div');
-        dayNumberEl.classList.add('day-number');
-        dayNumberEl.innerText = dayNumber;
-        daySquare.appendChild(dayNumberEl);
-
-        // 檢查這一天有沒有行程
-        const eventsForDay = events.filter(e => e.date === currentDateString);
-        eventsForDay.forEach(e => {
-          const eventDiv = document.createElement('div');
-          eventDiv.classList.add('event');
-          eventDiv.innerText = e.title;
-          daySquare.appendChild(eventDiv);
-        });
-
-        // 點擊新增行程
-        daySquare.addEventListener('click', () => {
-          const eventTitle = prompt(`為 ${month + 1}/${dayNumber} 新增行程：\n(若要刪除，請輸入「刪除」)`);
-          
-          if (eventTitle === '刪除') {
-            events = events.filter(e => e.date !== currentDateString); // 清空該日行程
-          } else if (eventTitle) {
-            events.push({ date: currentDateString, title: eventTitle });
-          }
-          
-          localStorage.setItem('my_calendar_events', JSON.stringify(events)); // 存檔
-          load(); // 重新整理畫面
-        });
-      } else {
-        daySquare.classList.add('padding'); // 空白格子
-      }
-      days.appendChild(daySquare);
+      // 渲染有開啟顯示的事件
+      let dayEvents = db.filter(e => e.date === dStr && e.show);
+      dayEvents.forEach(e => {
+        let badge = document.createElement('div');
+        badge.className = 'event-badge';
+        if(e.type === 'countdown') {
+          badge.classList.add('event-countdown');
+        } else {
+          badge.style.backgroundColor = e.color;
+        }
+        badge.innerText = e.title;
+        cell.appendChild(badge);
+      });
+      grid.appendChild(cell);
     }
   }
 
-  // 綁定按鈕功能
-  document.getElementById('nextButton').addEventListener('click', () => { nav++; load(); });
-  document.getElementById('backButton').addEventListener('click', () => { nav--; load(); });
+  function selectDate(dStr) {
+    selectedDateStr = dStr;
+    document.getElementById('panelTitle').innerText = `📝 ${dStr} 事項清單`;
+    document.getElementById('normalAddSection').style.display = 'block';
+    document.getElementById('examAddSection').style.display = 'block';
+    renderPanel();
+    renderCalendar(); // 刷新以顯示 active 邊框
+  }
 
-  // 啟動行事曆
-  load();
+  function renderPanel() {
+    const list = document.getElementById('eventList');
+    list.innerHTML = '';
+    if(!selectedDateStr) return;
+
+    let dayEvents = db.filter(e => e.date === selectedDateStr);
+    if(dayEvents.length === 0) {
+      list.innerHTML = '<p style="color:#94a3b8; font-size:14px;">當日無事項</p>';
+      return;
+    }
+
+    dayEvents.forEach(e => {
+      let item = document.createElement('div');
+      item.className = 'event-list-item';
+      item.style.borderLeftColor = e.color;
+      
+      item.innerHTML = `
+        <input type="checkbox" title="顯示在月曆上" ${e.show ? 'checked' : ''} onchange="toggleShow('${e.id}')">
+        <div class="event-list-title" style="${e.type==='countdown'?'color:#ef4444;font-weight:bold;':''}">${e.title}</div>
+        <button class="event-del-btn" onclick="deleteEvent('${e.id}')">刪</button>
+      `;
+      list.appendChild(item);
+    });
+  }
+
+  function changeWeek(offset) {
+    currentStartSunday.setDate(currentStartSunday.getDate() + (offset * 7));
+    renderCalendar();
+  }
+
+  function addNormalEvent() {
+    let title = document.getElementById('evTitle').value;
+    if(!title) return alert('請輸入事項名稱');
+    
+    db.push({
+      id: Date.now().toString(),
+      date: selectedDateStr,
+      title: title,
+      show: document.getElementById('evShow').checked,
+      color: document.getElementById('evColor').value,
+      type: 'normal'
+    });
+    
+    document.getElementById('evTitle').value = '';
+    saveAndRender();
+  }
+
+  function toggleShow(id) {
+    let ev = db.find(e => e.id === id);
+    if(ev) ev.show = !ev.show;
+    saveAndRender();
+  }
+
+  function deleteEvent(id) {
+    db = db.filter(e => e.id !== id);
+    saveAndRender();
+  }
+
+  function saveAndRender() {
+    localStorage.setItem('crm_events', JSON.stringify(db));
+    renderPanel();
+    renderCalendar();
+  }
+
+  // 大腦核心：段考自動化推算邏輯
+  function generateExamSchedule() {
+    if(!selectedDateStr) return;
+    
+    let classType = document.getElementById('examClass').value;
+    let className = document.getElementById('examClass').options[document.getElementById('examClass').selectedIndex].text;
+    let hasHoliday = document.getElementById('examHoliday').checked;
+    
+    let examDate = new Date(selectedDateStr);
+    
+    // 1. 建立當天的段考標記
+    db.push({
+      id: Date.now().toString() + "_exam",
+      date: selectedDateStr,
+      title: `🏆 ${className} 段考日`,
+      show: true, color: '#ef4444', type: 'exam'
+    });
+
+    // 2. 推算考前加強 (週六)
+    // 找到段考該週的星期日
+    let examSunday = getSunday(examDate);
+    // 預設倒退 8 天(前兩週的週六)，若遇連假倒退 15 天(前三週的週六)
+    let prepDaysBack = hasHoliday ? 15 : 8;
+    let prepDate = new Date(examSunday);
+    prepDate.setDate(prepDate.getDate() - prepDaysBack);
+    
+    db.push({
+      id: Date.now().toString() + "_prep",
+      date: formatDate(prepDate),
+      title: `🛡️ ${className} 考前加強`,
+      show: true, color: '#8b5cf6', type: 'prep'
+    });
+
+    // 3. 推算考前兩週的倒數堂數
+    // 設定推算的起點 (前兩週的星期日)
+    let countdownStart = new Date(examSunday);
+    countdownStart.setDate(countdownStart.getDate() - 14);
+    
+    let classDaysMatch = [];
+    if(classType === '14') classDaysMatch = [1, 4]; // 星期一、四
+    if(classType === '25') classDaysMatch = [2, 5]; // 星期二、五
+    if(classType === '36') classDaysMatch = [3, 6]; // 星期三、六
+
+    let classDates = [];
+    // 從起點開始，一天一天檢查，直到段考前一天
+    for(let d = new Date(countdownStart); d < examDate; d.setDate(d.getDate() + 1)) {
+      if(classDaysMatch.includes(d.getDay())) {
+        classDates.push(formatDate(d));
+      }
+    }
+
+    // 依序標上倒數堂數
+    let totalClasses = classDates.length;
+    classDates.forEach((dStr, index) => {
+      let count = totalClasses - index; // 例如共4堂，第一筆就是倒數4
+      db.push({
+        id: Date.now().toString() + "_cnt_" + index,
+        date: dStr,
+        title: `🔥 [${className}] 倒數 ${count} 堂`,
+        show: true, color: '#ffffff', type: 'countdown'
+      });
+    });
+
+    alert(`已為 ${className} 建立段考排程！\n加強課安排於：${formatDate(prepDate)}\n共生成 ${totalClasses} 堂倒數警示。`);
+    saveAndRender();
+  }
+
+  // 初始化啟動
+  renderCalendar();
 </script>
 
 </body>
