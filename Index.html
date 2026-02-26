@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的專屬行事曆</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f0f4f8;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+  }
+  #calendar {
+    width: 800px;
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  button {
+    padding: 8px 16px;
+    background-color: #1a73e8;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button:hover { background-color: #1557b0; }
+  .weekdays {
+    display: flex;
+    font-weight: bold;
+    color: #5f6368;
+    margin-bottom: 10px;
+  }
+  .weekdays div {
+    width: 14.28%;
+    text-align: center;
+  }
+  .days {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .day {
+    width: 14.28%;
+    height: 100px;
+    border: 1px solid #e0e0e0;
+    box-sizing: border-box;
+    padding: 8px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    transition: background-color 0.2s;
+  }
+  .day:hover { background-color: #f1f3f4; }
+  .day-number { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 5px; }
+  .event {
+    background-color: #1a73e8;
+    color: white;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    margin-top: 2px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .padding {
+    background-color: #f8f9fa;
+    cursor: default;
+  }
+  .padding:hover { background-color: #f8f9fa; }
+</style>
+</head>
+<body>
+
+<div id="calendar">
+  <div class="header">
+    <button id="backButton">◄ 上個月</button>
+    <h2 id="monthDisplay"></h2>
+    <button id="nextButton">下個月 ►</button>
+  </div>
+  <div class="weekdays">
+    <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+  </div>
+  <div class="days" id="days"></div>
+</div>
+
+<script>
+  let nav = 0; // 控制月份前後切換
+  // 從瀏覽器記憶體抓取過去存的行程，如果沒有就給空陣列
+  let events = localStorage.getItem('my_calendar_events') ? JSON.parse(localStorage.getItem('my_calendar_events')) : [];
+
+  const calendar = document.getElementById('calendar');
+  const days = document.getElementById('days');
+  const monthDisplay = document.getElementById('monthDisplay');
+
+  function load() {
+    const dt = new Date();
+    dt.setMonth(new Date().getMonth() + nav);
+    
+    const month = dt.getMonth();
+    const year = dt.getFullYear();
+    const firstDayOfMonth = new Date(year, month, 1);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    const paddingDays = firstDayOfMonth.getDay(); // 這個月第一天前面要空幾格
+
+    monthDisplay.innerText = `${year}年 ${month + 1}月`;
+    days.innerHTML = ''; // 清空上一次的畫面
+
+    for(let i = 1; i <= paddingDays + daysInMonth; i++) {
+      const daySquare = document.createElement('div');
+      daySquare.classList.add('day');
+
+      if (i > paddingDays) {
+        const dayNumber = i - paddingDays;
+        const currentDateString = `${year}/${month + 1}/${dayNumber}`;
+        
+        const dayNumberEl = document.createElement('div');
+        dayNumberEl.classList.add('day-number');
+        dayNumberEl.innerText = dayNumber;
+        daySquare.appendChild(dayNumberEl);
+
+        // 檢查這一天有沒有行程
+        const eventsForDay = events.filter(e => e.date === currentDateString);
+        eventsForDay.forEach(e => {
+          const eventDiv = document.createElement('div');
+          eventDiv.classList.add('event');
+          eventDiv.innerText = e.title;
+          daySquare.appendChild(eventDiv);
+        });
+
+        // 點擊新增行程
+        daySquare.addEventListener('click', () => {
+          const eventTitle = prompt(`為 ${month + 1}/${dayNumber} 新增行程：\n(若要刪除，請輸入「刪除」)`);
+          
+          if (eventTitle === '刪除') {
+            events = events.filter(e => e.date !== currentDateString); // 清空該日行程
+          } else if (eventTitle) {
+            events.push({ date: currentDateString, title: eventTitle });
+          }
+          
+          localStorage.setItem('my_calendar_events', JSON.stringify(events)); // 存檔
+          load(); // 重新整理畫面
+        });
+      } else {
+        daySquare.classList.add('padding'); // 空白格子
+      }
+      days.appendChild(daySquare);
+    }
+  }
+
+  // 綁定按鈕功能
+  document.getElementById('nextButton').addEventListener('click', () => { nav++; load(); });
+  document.getElementById('backButton').addEventListener('click', () => { nav--; load(); });
+
+  // 啟動行事曆
+  load();
+</script>
+
+</body>
+</html>
