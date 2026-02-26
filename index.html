@@ -2,8 +2,8 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>教務管理行事曆 v3.0</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>教務管理行事曆 v3.2</title>
 <style>
   :root {
     --col-sun: #f8f9fa;
@@ -11,7 +11,14 @@
     --col-25: #e8f5e9; 
     --col-36: #fff3e0; 
   }
-  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #eceff1; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+  body { 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    background-color: #eceff1; 
+    margin: 0; 
+    display: flex; 
+    height: 100vh; 
+    overflow: hidden; 
+  }
   
   #calendar-container { flex: 7; padding: 20px; display: flex; flex-direction: column; min-width: 0; }
   .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: white; padding: 10px 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
@@ -27,10 +34,8 @@
     background: white; border-radius: 6px; padding: 6px; cursor: pointer; 
     display: flex; flex-direction: column; box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
     border: 2px solid transparent; transition: 0.2s;
-    /* 處理資訊爆炸的關鍵：內部捲動 */
     overflow-y: auto; overflow-x: hidden;
   }
-  /* 美化捲動軸 */
   .day-cell::-webkit-scrollbar { width: 4px; }
   .day-cell::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
   
@@ -44,7 +49,6 @@
 
   .date-num { font-weight: bold; margin-bottom: 4px; color: #1e293b; font-size: 13px; position: sticky; top: 0; background: inherit; z-index: 2;}
   
-  /* 微型標籤設計 */
   .event-badge {
     color: white; padding: 2px 4px; border-radius: 3px; font-size: 11px; margin-bottom: 3px; 
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;
@@ -65,6 +69,19 @@
   .form-group { margin-bottom: 10px; }
   .form-group label { font-size: 12px; color: #475569; display: block; margin-bottom: 4px;}
   .form-group input[type="text"], .form-group select { width: 100%; padding: 6px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px;}
+
+  @media (max-width: 768px) {
+    body { flex-direction: column; height: auto; overflow: visible; }
+    #calendar-container { padding: 10px; width: 100%; box-sizing: border-box; }
+    .days-grid { grid-auto-rows: minmax(70px, auto); }
+    #panel-container { width: 100%; box-sizing: border-box; border-left: none; border-top: 2px solid #cbd5e1; min-height: 50vh; }
+    .header h2 { font-size: 15px !important; }
+    button { padding: 6px 12px; font-size: 12px; }
+    .weekdays { font-size: 12px; }
+    .hide-mobile { display: none; } 
+    .day-cell { padding: 3px; }
+    .event-badge { font-size: 10px; padding: 1px 2px; }
+  }
 </style>
 </head>
 <body>
@@ -76,7 +93,13 @@
     <button onclick="changeWeek(1)">下一週 ►</button>
   </div>
   <div class="weekdays">
-    <div>日</div><div>一 (1/4班)</div><div>二 (2/5班)</div><div>三 (3/6班)</div><div>四 (1/4班)</div><div>五 (2/5班)</div><div>六 (3/6班)</div>
+    <div>日</div>
+    <div id="wd-1">一</div>
+    <div id="wd-2">二</div>
+    <div id="wd-3">三</div>
+    <div id="wd-4">四</div>
+    <div id="wd-5">五</div>
+    <div id="wd-6">六</div>
   </div>
   <div class="days-grid" id="daysGrid"></div>
 </div>
@@ -101,11 +124,11 @@
   <div class="add-section" id="examAddSection" style="display:none; background:#fee2e2; border:1px solid #fca5a5;">
     <h4>⭐ 建立段考排程 (雙週加強)</h4>
     <div class="form-group">
-      <label>目標班級 (系統自動判斷年級)</label>
+      <label>目標年級</label>
       <select id="examClass">
-        <option value="14">一四班</option>
-        <option value="25">二五班</option>
-        <option value="36">三六班</option>
+        <option value="14" id="opt-14">載入中...</option>
+        <option value="25" id="opt-25">載入中...</option>
+        <option value="36" id="opt-36">載入中...</option>
       </select>
     </div>
     <div class="form-group">
@@ -128,20 +151,17 @@
   function getSunday(d) { let dt = new Date(d); dt.setDate(dt.getDate() - dt.getDay()); return dt; }
   function formatDate(d) { return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`; }
 
-  // 核心大腦：年級自動判斷引擎
   function getDynamicGrade(classType, targetDateObj) {
     let year = targetDateObj.getFullYear();
     let month = targetDateObj.getMonth() + 1;
-    // 每年 8 月 1 日作為學年切換點
     let academicYear = month < 8 ? year - 1 : year; 
-    let offset = academicYear - 2025; // 以 2025 學年為基準
+    let offset = academicYear - 2025; 
     
     let baseGrade;
-    if(classType === '14') baseGrade = 7; // 2025時 14是國一(7)
-    else if(classType === '25') baseGrade = 9; // 2025時 25是國三(9)
-    else if(classType === '36') baseGrade = 8; // 2025時 36是國二(8)
+    if(classType === '14') baseGrade = 7; 
+    else if(classType === '25') baseGrade = 9; 
+    else if(classType === '36') baseGrade = 8; 
     
-    // 計算年級循環 (7->8->9->7)
     let currentGrade = (((baseGrade - 7 + offset) % 3) + 3) % 3 + 7;
     
     if(currentGrade === 7) return "國一";
@@ -149,7 +169,28 @@
     if(currentGrade === 9) return "國三";
   }
 
+  // 根據目前月曆顯示的日期，動態更新所有的文字標籤
+  function updateDynamicLabels() {
+    let refDate = new Date(currentStartSunday);
+    let g14 = getDynamicGrade('14', refDate);
+    let g25 = getDynamicGrade('25', refDate);
+    let g36 = getDynamicGrade('36', refDate);
+
+    document.getElementById('wd-1').innerHTML = `一<span class="hide-mobile"> (${g14})</span>`;
+    document.getElementById('wd-2').innerHTML = `二<span class="hide-mobile"> (${g25})</span>`;
+    document.getElementById('wd-3').innerHTML = `三<span class="hide-mobile"> (${g36})</span>`;
+    document.getElementById('wd-4').innerHTML = `四<span class="hide-mobile"> (${g14})</span>`;
+    document.getElementById('wd-5').innerHTML = `五<span class="hide-mobile"> (${g25})</span>`;
+    document.getElementById('wd-6').innerHTML = `六<span class="hide-mobile"> (${g36})</span>`;
+
+    document.getElementById('opt-14').innerText = g14;
+    document.getElementById('opt-25').innerText = g25;
+    document.getElementById('opt-36').innerText = g36;
+  }
+
   function renderCalendar() {
+    updateDynamicLabels(); // 每次刷新月曆時，同步更新標籤名稱
+
     const grid = document.getElementById('daysGrid');
     grid.innerHTML = '';
     let endDate = new Date(currentStartSunday); endDate.setDate(endDate.getDate() + 27); 
@@ -188,7 +229,12 @@
     document.getElementById('panelTitle').innerText = `📝 ${dStr}`;
     document.getElementById('normalAddSection').style.display = 'block';
     document.getElementById('examAddSection').style.display = 'block';
-    renderPanel(); renderCalendar();
+    renderPanel(); 
+    renderCalendar();
+    
+    if(window.innerWidth <= 768) {
+      document.getElementById('panel-container').scrollIntoView({ behavior: 'smooth' });
+    }
   }
 
   function renderPanel() {
@@ -227,7 +273,6 @@
   function deleteEvent(id) { db = db.filter(e => e.id !== id); saveAndRender(); }
   function saveAndRender() { localStorage.setItem('crm_events_v3', JSON.stringify(db)); renderPanel(); renderCalendar(); }
 
-  // 核心大腦：雙週加強與連假迴避邏輯
   function generateExamSchedule() {
     if(!selectedDateStr) return;
     
@@ -235,16 +280,12 @@
     let skipAction = document.getElementById('skipHoliday').value;
     let examDate = new Date(selectedDateStr);
     
-    // 自動取得正確的年級！
     let gradeName = getDynamicGrade(classType, examDate);
     
-    // 1. 建立段考日
     db.push({ id: Date.now().toString() + "_ex", date: selectedDateStr, title: `🏆 ${gradeName} 段考`, show: true, color: '#ef4444', type: 'exam' });
 
-    // 2. 尋找考前週六 (精準定位)
     let dayOfWeek = examDate.getDay();
     let sat1 = new Date(examDate);
-    // 找最近的週六。如果段考剛好在週六(6)，前一個週六就是7天前。
     let daysToSat1 = dayOfWeek === 6 ? 7 : dayOfWeek + 1;
     sat1.setDate(sat1.getDate() - daysToSat1);
     
@@ -253,17 +294,15 @@
 
     let prepDays = [];
     if(skipAction === 'none') { prepDays = [sat1, sat2]; }
-    else if(skipAction === 'sat1') { prepDays = [sat2, sat3]; } // 跳過第一週
-    else if(skipAction === 'sat2') { prepDays = [sat1, sat3]; } // 跳過第二週
+    else if(skipAction === 'sat1') { prepDays = [sat2, sat3]; } 
+    else if(skipAction === 'sat2') { prepDays = [sat1, sat3]; } 
 
-    // 生成兩次加強課
     prepDays.forEach((pDate, idx) => {
       db.push({ id: Date.now().toString() + "_p" + idx, date: formatDate(pDate), title: `🛡️ ${gradeName} 加強`, show: true, type: 'prep' });
     });
 
-    // 3. 生成倒數 (考前兩週內)
     let countdownStart = new Date(sat1); 
-    countdownStart.setDate(countdownStart.getDate() - 13); // 從 sat1 的前一週日開始算，包辦兩週
+    countdownStart.setDate(countdownStart.getDate() - 13); 
 
     let classDaysMatch = classType === '14' ? [1, 4] : classType === '25' ? [2, 5] : [3, 6];
     let classDates = [];
