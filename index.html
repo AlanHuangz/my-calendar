@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>教務管理行事曆 v3.3 (含國定假日)</title>
+<title>教務管理行事曆 v3.4</title>
 <style>
   :root {
     --col-sun: #f8f9fa;
@@ -39,7 +39,8 @@
   .day-cell::-webkit-scrollbar { width: 4px; }
   .day-cell::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
   
-  .day-cell.active { border-color: #3b82f6; }
+  /* 電腦版選取狀態 */
+  .day-cell.active { border-color: #3b82f6; background-color: #eff6ff !important; }
   .day-cell:hover { filter: brightness(0.95); }
   
   .day-cell:nth-child(7n+1) { background-color: var(--col-sun); }
@@ -54,7 +55,7 @@
     color: white; padding: 2px 4px; border-radius: 3px; font-size: 11px; margin-bottom: 3px; 
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;
   }
-  .event-countdown { border: 1px solid #ef4444; color: #ef4444; background: transparent; font-weight: bold; }
+  .event-countdown { border: 1px solid #ef4444; color: #ef4444; background: white; font-weight: bold; }
   .event-prep { background-color: #8b5cf6; }
 
   #panel-container { flex: 3; background: white; border-left: 1px solid #cbd5e1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; min-width: 300px;}
@@ -71,18 +72,32 @@
   .form-group label { font-size: 12px; color: #475569; display: block; margin-bottom: 4px;}
   .form-group input[type="text"], .form-group select { width: 100%; padding: 6px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px;}
 
+  /* 💻 電腦版與手機版顯示切換邏輯 */
+  .desktop-only { display: inline; }
+  .mobile-only { display: none; }
+
+  /* 📱 手機版專屬響應式設定 */
   @media (max-width: 768px) {
     body { flex-direction: column; height: auto; overflow: visible; }
     #calendar-container { padding: 10px; width: 100%; box-sizing: border-box; }
-    .days-grid { grid-auto-rows: minmax(70px, auto); }
-    #panel-container { width: 100%; box-sizing: border-box; border-left: none; border-top: 2px solid #cbd5e1; min-height: 50vh; }
+    .days-grid { grid-auto-rows: minmax(65px, auto); }
+    #panel-container { width: 100%; box-sizing: border-box; border-left: none; border-top: 2px solid #cbd5e1; min-height: 50vh; padding: 15px;}
     .header h2 { font-size: 15px !important; }
     button { padding: 6px 12px; font-size: 12px; }
     .weekdays { font-size: 12px; }
+    
+    .desktop-only { display: none !important; }
+    .mobile-only { display: inline !important; }
     .hide-mobile { display: none; } 
-    .day-cell { padding: 3px; }
-    .event-badge { font-size: 10px; padding: 1px 2px; }
-    .holiday-text { font-size: 9px; }
+    
+    .day-cell { padding: 4px; }
+    
+    /* 強化手機版點選高光 */
+    .day-cell.active { border: 2px solid #3b82f6 !important; box-shadow: inset 0 0 5px rgba(59,130,246,0.3); }
+    .day-cell.active .date-num { color: #2563eb !important; transform: scale(1.1); transition: 0.2s;}
+    
+    /* 手機版標籤置中、字體縮小 */
+    .event-badge { font-size: 11px; padding: 2px; text-align: center; }
   }
 </style>
 </head>
@@ -150,7 +165,6 @@
   let currentStartSunday = getSunday(new Date());
   let selectedDateStr = null;
 
-  // 🏛️ 內建行政院 2026 年國定假日資料庫 (MVP版專用)
   const twHolidays = {
     "2026/01/01": "元旦",
     "2026/02/14": "春節連假", "2026/02/15": "小年夜", "2026/02/16": "除夕", "2026/02/17": "初一", "2026/02/18": "初二", "2026/02/19": "初三", "2026/02/20": "春節補假", "2026/02/21": "春節連假", "2026/02/22": "春節連假",
@@ -203,6 +217,18 @@
     document.getElementById('opt-36').innerText = g36;
   }
 
+  // 🪄 標籤文字轉換器 (將長文字轉為手機專用短字串)
+  function getShortTitle(title, type) {
+    if (type === 'countdown') {
+        let m = title.match(/(🔥).*:\s*(\d+)/);
+        if (m) return m[1] + ' ' + m[2]; // 變成 "🔥 4"
+    }
+    if (type === 'prep') return '🛡️'; // 變成 "🛡️"
+    if (type === 'exam') return '🏆'; // 變成 "🏆"
+    if (title.length > 3) return title.substring(0, 3) + '..'; // 一般事項截斷
+    return title;
+  }
+
   function renderCalendar() {
     updateDynamicLabels(); 
 
@@ -222,16 +248,18 @@
       let numDiv = document.createElement('div');
       numDiv.className = 'date-num';
       
-      // 左邊顯示日期數字
       let numSpan = document.createElement('span');
       numSpan.innerText = d.getDate() === 1 ? `${d.getMonth()+1}月1日` : d.getDate();
       numDiv.appendChild(numSpan);
       
-      // 右邊自動判斷並顯示國定假日
+      // 🎌 假日顯示邏輯：電腦顯示文字，手機顯示紅字加小紅旗
       if (twHolidays[dStr]) {
+        numSpan.style.color = '#ef4444'; // 日期數字變紅
         let holidaySpan = document.createElement('span');
-        holidaySpan.className = 'holiday-text';
-        holidaySpan.innerText = `🎌 ${twHolidays[dStr]}`;
+        holidaySpan.innerHTML = `
+          <span class="desktop-only holiday-text">🎌 ${twHolidays[dStr]}</span>
+          <span class="mobile-only holiday-text" style="font-size: 14px;">🎌</span>
+        `;
         numDiv.appendChild(holidaySpan);
       }
       
@@ -245,7 +273,12 @@
         else if(e.type === 'prep') badge.classList.add('event-prep');
         else badge.style.backgroundColor = e.color;
         
-        badge.innerText = e.title;
+        // 🪄 渲染雙軌文字：電腦版看長字，手機版看極簡圖示
+        let shortTitle = getShortTitle(e.title, e.type);
+        badge.innerHTML = `
+          <span class="desktop-only">${e.title}</span>
+          <span class="mobile-only">${shortTitle}</span>
+        `;
         cell.appendChild(badge);
       });
       grid.appendChild(cell);
@@ -255,7 +288,6 @@
   function selectDate(dStr) {
     selectedDateStr = dStr;
     
-    // 面板標題也會顯示該日是不是假日
     let titleText = `📝 ${dStr}`;
     if(twHolidays[dStr]) titleText += ` (${twHolidays[dStr]})`;
     document.getElementById('panelTitle').innerText = titleText;
