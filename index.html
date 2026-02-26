@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>教務管理行事曆 v3.2</title>
+<title>教務管理行事曆 v3.3 (含國定假日)</title>
 <style>
   :root {
     --col-sun: #f8f9fa;
@@ -47,7 +47,8 @@
   .day-cell:nth-child(7n+3), .day-cell:nth-child(7n+6) { background-color: var(--col-25); }
   .day-cell:nth-child(7n+4), .day-cell:nth-child(7n+7) { background-color: var(--col-36); }
 
-  .date-num { font-weight: bold; margin-bottom: 4px; color: #1e293b; font-size: 13px; position: sticky; top: 0; background: inherit; z-index: 2;}
+  .date-num { font-weight: bold; margin-bottom: 4px; color: #1e293b; font-size: 13px; position: sticky; top: 0; background: inherit; z-index: 2; display: flex; justify-content: space-between; align-items: center;}
+  .holiday-text { color: #ef4444; font-size: 11px; font-weight: normal; }
   
   .event-badge {
     color: white; padding: 2px 4px; border-radius: 3px; font-size: 11px; margin-bottom: 3px; 
@@ -81,6 +82,7 @@
     .hide-mobile { display: none; } 
     .day-cell { padding: 3px; }
     .event-badge { font-size: 10px; padding: 1px 2px; }
+    .holiday-text { font-size: 9px; }
   }
 </style>
 </head>
@@ -148,6 +150,20 @@
   let currentStartSunday = getSunday(new Date());
   let selectedDateStr = null;
 
+  // 🏛️ 內建行政院 2026 年國定假日資料庫 (MVP版專用)
+  const twHolidays = {
+    "2026/01/01": "元旦",
+    "2026/02/14": "春節連假", "2026/02/15": "小年夜", "2026/02/16": "除夕", "2026/02/17": "初一", "2026/02/18": "初二", "2026/02/19": "初三", "2026/02/20": "春節補假", "2026/02/21": "春節連假", "2026/02/22": "春節連假",
+    "2026/02/27": "和平紀念日補假", "2026/02/28": "和平紀念日", "2026/03/01": "228連假",
+    "2026/04/03": "兒童節補假", "2026/04/04": "兒童節", "2026/04/05": "清明節", "2026/04/06": "清明補假",
+    "2026/05/01": "勞動節", "2026/05/02": "勞動節連假", "2026/05/03": "勞動節連假",
+    "2026/06/19": "端午節", "2026/06/20": "端午連假", "2026/06/21": "端午連假",
+    "2026/09/25": "中秋節", "2026/09/26": "中秋教師連休", "2026/09/27": "中秋教師連休", "2026/09/28": "教師節",
+    "2026/10/09": "國慶補假", "2026/10/10": "國慶日", "2026/10/11": "國慶連假",
+    "2026/10/24": "光復節連假", "2026/10/25": "台灣光復節", "2026/10/26": "光復節補假",
+    "2026/12/25": "行憲紀念日", "2026/12/26": "行憲連假", "2026/12/27": "行憲連假"
+  };
+
   function getSunday(d) { let dt = new Date(d); dt.setDate(dt.getDate() - dt.getDay()); return dt; }
   function formatDate(d) { return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`; }
 
@@ -169,7 +185,6 @@
     if(currentGrade === 9) return "國三";
   }
 
-  // 根據目前月曆顯示的日期，動態更新所有的文字標籤
   function updateDynamicLabels() {
     let refDate = new Date(currentStartSunday);
     let g14 = getDynamicGrade('14', refDate);
@@ -189,7 +204,7 @@
   }
 
   function renderCalendar() {
-    updateDynamicLabels(); // 每次刷新月曆時，同步更新標籤名稱
+    updateDynamicLabels(); 
 
     const grid = document.getElementById('daysGrid');
     grid.innerHTML = '';
@@ -206,7 +221,20 @@
       
       let numDiv = document.createElement('div');
       numDiv.className = 'date-num';
-      numDiv.innerText = d.getDate() === 1 ? `${d.getMonth()+1}月1日` : d.getDate();
+      
+      // 左邊顯示日期數字
+      let numSpan = document.createElement('span');
+      numSpan.innerText = d.getDate() === 1 ? `${d.getMonth()+1}月1日` : d.getDate();
+      numDiv.appendChild(numSpan);
+      
+      // 右邊自動判斷並顯示國定假日
+      if (twHolidays[dStr]) {
+        let holidaySpan = document.createElement('span');
+        holidaySpan.className = 'holiday-text';
+        holidaySpan.innerText = `🎌 ${twHolidays[dStr]}`;
+        numDiv.appendChild(holidaySpan);
+      }
+      
       cell.appendChild(numDiv);
 
       let dayEvents = db.filter(e => e.date === dStr && e.show);
@@ -226,7 +254,12 @@
 
   function selectDate(dStr) {
     selectedDateStr = dStr;
-    document.getElementById('panelTitle').innerText = `📝 ${dStr}`;
+    
+    // 面板標題也會顯示該日是不是假日
+    let titleText = `📝 ${dStr}`;
+    if(twHolidays[dStr]) titleText += ` (${twHolidays[dStr]})`;
+    document.getElementById('panelTitle').innerText = titleText;
+    
     document.getElementById('normalAddSection').style.display = 'block';
     document.getElementById('examAddSection').style.display = 'block';
     renderPanel(); 
